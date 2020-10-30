@@ -79,7 +79,13 @@ oc apply -n ccfd -f deploy/model/modelfull-route.yaml
 
 === Upload data to Rook-Ceph/OCS
 
-Create a bucket through an Object Bucket Claim. Depending if you are using Rook-Ceph or OCS, you can use different configurations.
+==== Rook-Ceph or OCS deployment
+
+Refer to...
+
+==== Bucket creation though Object Bucket Claims
+
+We will store our base data in an Object Store bucket. There are many ways to do it, but here is a method using an Object Bucket Claim. Depending if you are using Rook-Ceph or OCS, you can use different configurations.
 
 .With Rook-Ceph
 [source,bash]
@@ -99,13 +105,12 @@ oc apply -n ccfd -f deploy/storage/obc-ocs-mcg.yaml
 oc apply -n ccfd -f deploy/storage/obc-ocs-rgw.yaml
 ----
 
-Retrieve the informations needed to connect to the storage.
+You can now retrieve the informations needed to connect to the storage.
 
-==== With Rook-Ceph
+.With Rook-Ceph
+To be written
 
-
-==== With OCS
-
+.With OCS
 You can find the information through the OCP console, in the "Storage->Object Bucket Claims" section (selecting ccdata and clicking on "Reveal values"), or do this through the CLI:
 
 .Access Key
@@ -138,3 +143,138 @@ oc get cm/ccdata -o yaml | grep [^:]BUCKET_HOST | awk '{print $2}'
 oc get -n openshift-storage route/s3 -o yaml | grep -m 1 '[^\-] host:' | awk '{print $2}'
 ----
 
+==== Upload data to your S3 bucket
+
+Now that you have all the necessary information, you can upload data to your newly created bucket. Again, there are many ways to do that, but here is an example using the https://github.com/aws/aws-cli[aws client].
+
+If you don't have the aws client already you can install it from https://github.com/aws/aws-cli[here].
+
+.Configure the client (Only enter key and secret, leave all other fields as default)
+[source,bash]
+----
+aws configure
+----
+
+.Check if connection is working using the route (you can use oc get route -n rook-ceph):
+[source,bash]
+----
+aws s3 ls --endpoint-url <S3_ENDPOINT_URL>
+----
+
+WARNING: For the previous command and all others using the aws client: if your endpoint is using SSL (starts with https) but your OpenShift installation has not been done with recognized certificates, you must add `--no-verify-ssl` at the end of all your commands.
+
+.Copy the credit card transaction creditcard.csv file (available https://s3.amazonaws.com/com.redhat.csds.odh.tutorial-data/data_creditcard.csv[here]) and upload it using (replace < > vars):
+[source,bash]
+----
+wget -qO- https://s3.amazonaws.com/com.redhat.csds.odh.tutorial-data/data_creditcard.csv | aws s3 cp - --endpoint-url <S3_ENDPOINT_URL> s3://<s3_bucket>/OPEN/uploaded/creditcard.csv --acl public-read-write
+----
+
+e.g.: `wget -qO- https://s3.amazonaws.com/com.redhat.csds.odh.tutorial-data/data_creditcard.csv | aws s3 cp - --endpoint-url https://s3-openshift-storage.apps.perf3.ocs.lab.eng.blr.redhat.com s3://ccdata-5a225950-c53c-4f10-af42-f49c3c29d03a/OPEN/uploaded/creditcard.csv --acl public-read-write`
+
+.You can verify the file is uploaded using:
+[source,bash]
+----
+aws s3 ls s3://<s3_bucket>/OPEN/uploaded/ --endpoint-url <ROOK_CEPH_URL>
+----
+
+=== KIE Server
+
+==== Seldon model for the prediction service
+
+In order to use jBPM's prediction service from User Tasks, a second Seldon model must be deployed using:
+
+[source,bash]
+----
+oc new-app ruivieira/ccfd-seldon-usertask-model
+----
+
+==== Execution server
+
+To deploy the KIE server you can use the deploy/ccd-service.yaml on this repo and run:
+
+[source,bash]
+----
+oc apply -f deploy/ccd-service.yaml -n ccfd
+----
+
+The KIE server can be configured by editing the enviroment variables in that file, under the env key.
+Some configurable values are:
+
+
+SELDON_URL, location the Seldon server providing fraudulent score prediction
+
+CUSTOMER_NOTIFICATION_TOPIC, Kafka topic for outgoing customer notifications
+
+BROKER_URL, Kafka broker location and port
+
+
+==== Execution server optional configuration
+If the Seldon server requires an authentication token, this can be passed to the KIE server by adding the following environment variable to deploy/ccd-service.yaml:
+
+[source,yaml]
+----
+- name: SELDON_TOKEN
+  value: <SELDON_TOKEN>
+----
+
+By default, the KIE server will request a prediction to the endpoint <SELDON_URL>/predict. If however, your Seldon deployment uses another prediction endpoint, you can specify it by adding the SELDON_ENDPOINT enviroment variable, for instance:
+
+[source,yaml]
+----
+- name: SELDON_ENDPOINT
+  value: 'api/v0.1/predictions'
+----
+
+The HTTP connection parameters can also be configured, namely the connection pool size and the connections timeout. The timeout value provided is treated as milliseconds. For instance:
+
+[source,yaml]
+----
+- name: SELDON_TIMEOUT
+  value: '5000' # five second timeout
+- name: SELDON_POOL_SIZE
+  value: '5' # allows for 5 simulataneous HTTP connections
+----
+
+The prediction service's confidence threshold, above which a prediction automatically assigns an output and
+closes the user task can be also provided. It is assumed to be a probability value between 0.0 and 1.0.
+If not provided, the default value is 1.0. To specify it use:
+
+[source,yaml]
+----
+- name: CONFIDENCE_THRESHOLD
+  value: '0.5' # as an example
+----
+
+If you want to interact with the KIE server's REST interface from outside OpenShift, you can expose its service with
+
+[source,bash]
+----
+oc expose svc/ccd-service
+----
+
+=== Notification service
+
+The notification service is an event-driven micro-service responsible for relaying notifications to the customer and customer responses.
+
+If a message is sent to a "customer outgoing" Kafka topic, a notification is sent to the customer asking whether the transaction was legitimate or not. For this demo, the micro-service simulates customer interaction, but different communication methods can be built on top of it (email, SMS, etc).
+
+If the customer replies (in both scenarios: they either made the transaction or not), a message is written to a "customer response" topic. The router (described below) subscribes to messages in this topic, and signals the business process with the customer response.
+To deploy the notification service, we use the image ruivieira/ccfd-notification-service (available https://hub.docker.com/repository/docker/ruivieira/ccfd-notification-service[here]), by running:
+
+[source,bash]
+----
+oc apply -f deploy/notification-service.yaml -n ccfd
+----
+
+==== Camel router
+
+The https://camel.apache.org/[Apache Camel] router is responsible consume messages arriving in specific topics, requesting a prediction to the Seldon model, and then triggering different REST endpoints according to that prediction.
+
+The route is selected by executing configurable https://www.drools.org/[Drools] rules using the model's prediction as inout. Depending rules outcome a specific business process will be triggered on the KIE server.
+
+To deploy a router with listens to the topic KAFKA_TOPIC from Kafka's broker BROKER_URL and starts a process instance on the KIE server at KIE_SERVER_URL, we can use the built image ruimvieira/ccd-fuse (available https://hub.docker.com/repository/docker/ruivieira/ccd-fuse[here]):
+
+[source,bash]
+----
+oc apply -f deploy/router.yaml -n ccfd
+----
