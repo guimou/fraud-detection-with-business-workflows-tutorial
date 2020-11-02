@@ -143,6 +143,23 @@ oc get cm/ccdata -o yaml | grep [^:]BUCKET_HOST | awk '{print $2}'
 oc get -n openshift-storage route/s3 -o yaml | grep -m 1 '[^\-] host:' | awk '{print $2}'
 ----
 
+==== Create a Secret to store your keys
+
+This secret will be used later on by the pods that need access to S3, like the Kafka Producer.
+
+[source,bash]
+----
+oc create secret generic keysecret -n ccfd --from-literal='accesskey=<Replace with Access Key>' --from-literal='secretkey=<Replace with Secret Key>'
+----
+
+TIP: If you have created your bucket through an Object Bucket Claim in OCS, you can directly do this:
+
+[source,bash]
+----
+oc create secret generic keysecret -n ccfd --from-literal="accesskey=$(oc get secret/ccdata -o yaml | grep [^:]AWS_ACCESS_KEY_ID | awk '{print $2}' | base64 -d -)" --from-literal="secretkey=$(oc get secret/ccdata -o yaml | grep [^:]AWS_SECRET_ACCESS_KEY | awk '{print $2}' | base64 -d -)"
+----
+
+
 ==== Upload data to your S3 bucket
 
 Now that you have all the necessary information, you can upload data to your newly created bucket. Again, there are many ways to do that, but here is an example using the https://github.com/aws/aws-cli[aws client].
@@ -278,3 +295,28 @@ To deploy a router with listens to the topic KAFKA_TOPIC from Kafka's broker BRO
 ----
 oc apply -f deploy/router.yaml -n ccfd
 ----
+
+==== Kafka Producer
+
+The Kafka Producer needs specific parameters to read from S3 interface and call the model's REST prediction endpoint. +
+
+We will use a template to deploy multiple objects at once. You can either edit the parameters in the `deploy/kafka/producer-deployment.yaml` in this repository before processing the template, or pass the parameters direcly. The needed parameters are:
+
+- NAMESPACE: The OpenShift project in use, normally `ccfd`
+- S3ENDPOINT: The address of your S3 storage, you should use the internal cluster address (normally s3.openshift-storage.svc)
+- S3BUCKET: The name of the bucket created earlier
+- FILENAME: The location of hte `creditcard.csv` file in the data store (nornmaly OPEN/uploaded/creditcard.csv)
+
+.If you have directly modified the producer-deployment.yaml file
+[source,bash]
+----
+oc process -f deploy/kafka/producer-deployment.yaml | oc apply -f -
+----
+
+.If you are passing the parameters
+[source,bash]
+----
+oc process -f deploy/kafka/producer-deployment.yaml -p NAMESPACE=<Replace Namespace> -p S3ENDPOINT=<Replace Endpoint> -p S3BUCKET=<Replace Bucket> -p FILENAME=<Replace Filename> | oc apply -f -
+----
+
+e.g.: `oc process -f deploy/kafka/producer-deployment.yaml -p NAMESPACE=ccfd -p S3ENDPOINT=http://s3.openshift-storage.svc -p S3BUCKET=ccdata-5a225950-c53c-4f10-af42-f49c3c29d03a -p FILENAME=OPEN/uploaded/creditcard.csv | oc apply -f -`
