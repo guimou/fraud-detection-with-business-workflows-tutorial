@@ -37,6 +37,10 @@ spec:
     deploymentconfig: ccd-service
   template:
     metadata:
+      annotations:
+        prometheus.io/path: /rest/metrics
+        prometheus.io/port: '8090'
+        prometheus.io/scrape: 'true'
       labels:
         app: ccd-service
         deploymentconfig: ccd-service

@@ -37,6 +37,10 @@ spec:
     deploymentconfig: ccd-fuse
   template:
     metadata:
+      annotations:
+        prometheus.io/path: /prometheus
+        prometheus.io/port: '8091'
+        prometheus.io/scrape: 'true'
       labels:
         app: ccd-fuse
         deploymentconfig: ccd-fuse
