@@ -16,7 +16,7 @@ spec:
   - componentSpecs:
     - spec:
         containers:
-        - image: nakfour/modelfull
+        - image: quay.io/odh-workshops/ccfd-business-workflow-tutorial-ccfd-modelfull:1.1-CCFD
           imagePullPolicy: Always
           name: modelfull
           resources:

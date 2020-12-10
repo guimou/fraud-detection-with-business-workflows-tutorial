@@ -28,7 +28,7 @@ spec:
         from:
           kind: ImageStreamTag
           namespace: ccfd
-          name: 'ccd-fuse:1.0-SNAPSHOT'
+          name: 'ccd-fuse:1.1-CCFD'
   replicas: 1
   revisionHistoryLimit: 10
   test: false
@@ -43,7 +43,7 @@ spec:
     spec:
       containers:
         - name: ccd-fuse
-          image: ruivieira/ccd-fuse
+          image: ccd-fuse:1.1-CCFD
           ports:
             - containerPort: 8091
               protocol: TCP
@@ -113,9 +113,9 @@ spec:
     lookupPolicy:
       local: false
     tags:
-      - name: 1.0-SNAPSHOT
+      - name: 1.1-CCFD
         from:
           kind: DockerImage
-          name: 'ruivieira/ccd-fuse:1.0-SNAPSHOT'
+          name: 'quay.io/odh-workshops/ccfd-business-workflow-tutorial-ccd-fuse:1.1-CCFD'
         referencePolicy:
           type: Source

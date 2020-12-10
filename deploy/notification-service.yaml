@@ -28,7 +28,7 @@ spec:
         from:
           kind: ImageStreamTag
           namespace: ccfd
-          name: 'ccfd-notification-service:1.0-SNAPSHOT'
+          name: 'ccfd-notification-service:1.1-CCFD'
   replicas: 1
   revisionHistoryLimit: 10
   test: false
@@ -43,7 +43,7 @@ spec:
     spec:
       containers:
         - name: ccfd-notification-service
-          image: ruivieira/ccfd-notification-service
+          image: ccfd-notification-service:1.1-CCFD
           ports:
             - containerPort: 8080
               protocol: TCP
@@ -88,12 +88,12 @@ spec:
   lookupPolicy:
     local: false
   tags:
-    - name: 1.0-SNAPSHOT
+    - name: 1.1-CCFD
       annotations:
-        openshift.io/imported-from: 'ruivieira/ccfd-notification-service:1.0-SNAPSHOT'
+        openshift.io/imported-from: 'quay.io/odh-workshops/ccfd-business-workflow-tutorial-ccfd-notification-service:1.1-CCFD'
       from:
         kind: DockerImage
-        name: 'ruivieira/ccfd-notification-service:1.0-SNAPSHOT'
+        name: 'quay.io/odh-workshops/ccfd-business-workflow-tutorial-ccfd-notification-service:1.1-CCFD'
       importPolicy: {}
       referencePolicy:
         type: Source

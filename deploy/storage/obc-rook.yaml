@@ -4,4 +4,4 @@ metadata:
   name: ccdata
 spec:
   generateBucketName: ccdata
-  storageClassName: rook-ceph-bucket
+  storageClassName: rook-ceph-delete-bucket
