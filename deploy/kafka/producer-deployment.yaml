@@ -39,7 +39,8 @@ objects:
           name: kafka-producer:latest
       source:
         git:
-          uri: https://github.com/nakfour/fradudetection-producer-consumer.git
+          uri: https://github.com/opendatahub-io/Fraud-Detection-with-Business-Workflows-Tutorial.git
+        contextDir: deploy/fraud-detection-producer-consumer-master
         type: Git
       strategy:
         sourceStrategy:
