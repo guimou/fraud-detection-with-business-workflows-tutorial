@@ -1,11 +1,11 @@
 apiVersion: integreatly.org/v1alpha1
 kind: GrafanaDashboard
 metadata:
-  name: seldon-dashboard
+  name: seldon-core-dashboard
   labels:
     app: grafana
 spec:
-  name: seldon-dashboard.json
+  name: seldon-core-dashboard.json
   json: |
     {
       "annotations": {

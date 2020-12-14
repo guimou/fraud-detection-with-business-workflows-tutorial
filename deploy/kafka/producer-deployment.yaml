@@ -96,7 +96,6 @@ objects:
               value: ${FILENAME}
             - name: bootstrap
               value: "odh-message-bus-kafka-bootstrap:9092"
-
           restartPolicy: Always
       triggers:
         - type: ConfigChange

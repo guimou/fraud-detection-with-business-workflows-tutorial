@@ -44,9 +44,6 @@ class modelfull(object):
         
     def metrics(self):
         return [
-            {"type":"COUNTER","key":"mycounter","value":1}, # a counter which will increase by the given value
-            {"type":"GAUGE","key":"mygauge","value":100}, # a gauge which will be set to given value
-            {"type":"TIMER","key":"mytimer","value":20.2}, # a timer which will add sum and count metrics - assumed millisecs
             {"type":"GAUGE","key":"V3","value":self.V3},
             {"type":"GAUGE","key":"V4","value":self.V4},
             {"type":"GAUGE","key":"V10","value":self.V10},

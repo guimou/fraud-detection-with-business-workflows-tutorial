@@ -426,12 +426,32 @@ oc process -f deploy/kafka/producer-deployment.yaml -p NAMESPACE=ccfd -p S3ENDPO
 
 ==== Grafana/Prometheus
 
+Create the Service Monitors needed by Prometheus to scrap metrics from the Kie Server and the Router.+
+
+.Kie Server Service Monitor
+[source,bash]
+----
+oc apply -f deploy/servicemonitors/ccdserviceservicemonitor.yaml
+----
+
+.Camel Router Service Monitor
+[source,bash]
+----
+oc apply -f deploy/servicemonitors/ccdfuseservicemonitor.yaml
+----
+
 From the Openshift portal click on the Prometheus route and explore some of the metrics. +
 To launch Grafana dashboard click on the Grafana route.
 
-On top of the Kafka monitoring dashbord, you can deploy the following ones:
+On top of the Kafka monitoring dashboard, you can deploy the following ones:
 
 .Seldon Core
+[source,bash]
+----
+oc apply -f deploy/grafana/seldon-dashboard.yaml
+----
+
+.Kie Server
 [source,bash]
 ----
 oc apply -f deploy/grafana/seldon-dashboard.yaml
