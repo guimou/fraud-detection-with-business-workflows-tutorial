@@ -129,7 +129,7 @@ spec:
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "1000",
+              "max": null,
               "min": "0",
               "show": true
             }
@@ -376,7 +376,7 @@ spec:
           }
         }
       ],
-      "refresh": false,
+      "refresh": "10s",
       "schemaVersion": 26,
       "style": "dark",
       "tags": [],
@@ -414,5 +414,5 @@ spec:
       "timezone": "",
       "title": "Model Predictions",
       "uid": "X4QmwK1Mz",
-      "version": 1
+      "version": 2
     }
