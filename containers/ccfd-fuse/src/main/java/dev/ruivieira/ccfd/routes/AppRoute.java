@@ -98,9 +98,9 @@ public class AppRoute extends RouteBuilder {
                     // extract the features of interest
                     for (int index : indices) {
                         feature.add(Double.parseDouble(kafkaFeatures.get(index-1)));
+                    }
                     Integer amountIndex = 29;
                     
-
                     //exchange.getOut().setHeader("amount", Double.parseDouble(kafkaFeatures.get(amountIndex)));
                     exchange.getMessage().setHeader("amount", Double.parseDouble(kafkaFeatures.get(amountIndex)));
 
