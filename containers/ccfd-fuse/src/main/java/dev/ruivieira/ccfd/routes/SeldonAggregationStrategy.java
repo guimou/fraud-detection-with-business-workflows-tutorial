@@ -23,14 +23,11 @@ public class SeldonAggregationStrategy implements AggregationStrategy {
 
     private static final Logger logger = LoggerFactory.getLogger(SeldonAggregationStrategy.class);
 
-    private Boolean USE_SELDON_STANDARD;
-
     private final ObjectMapper responseMapper = new ObjectMapper();
 
     private KieSession kieSession;
 
     public SeldonAggregationStrategy() {
-        USE_SELDON_STANDARD = System.getenv("SELDON_STANDARD") != null;
         responseMapper.enable(SerializationFeature.WRAP_ROOT_VALUE);
 
         KieServices kieServices = KieServices.Factory.get();
@@ -45,31 +42,20 @@ public class SeldonAggregationStrategy implements AggregationStrategy {
         List<Double> features = new ArrayList<>();
 
         try {
-            if (USE_SELDON_STANDARD) {
-                PredictionRequest request = PredictionRequest.fromString(originalBody.toString());
-                // build KIE server data payload
-                features = request.getData().getOutcomes().get(0);
-            } else {
-                ObjectMapper requestMapper = new ObjectMapper();
-                Map<String, String> map = requestMapper.readValue(originalBody.toString(), Map.class);
-                String[] featureString = map.get("strData").split(",");
-                for (String f : featureString) {
-                    features.add(Double.parseDouble(f));
-                }
+            ObjectMapper requestMapper = new ObjectMapper();
+            Map<String, String> map = requestMapper.readValue(originalBody.toString(), Map.class);
+            String[] featureString = map.get("strData").split(",");
+            for (String f : featureString) {
+                features.add(Double.parseDouble(f));   
             }
 
 
             Prediction prediction = new Prediction();
 
-            if (USE_SELDON_STANDARD) {
-                dev.ruivieira.ccfd.routes.messages.v1.PredictionResponse response = responseMapper.readValue(resourceResponse.toString(), dev.ruivieira.ccfd.routes.messages.v1.PredictionResponse.class);
-                prediction.setProbability(response.getData().getOutcomes().get(0).get(0));
-            } else {
-                dev.ruivieira.ccfd.routes.messages.v0.PredictionResponse response = responseMapper.readValue(resourceResponse.toString(), dev.ruivieira.ccfd.routes.messages.v0.PredictionResponse.class);
-                PredictionMetadata meta = response.getMetadata();
-                List<MetricsData> metrics = meta.getMetrics();
-                prediction.setProbability(metrics.get(metrics.size()-1).getValue());
-            }
+            dev.ruivieira.ccfd.routes.messages.v0.PredictionResponse response = responseMapper.readValue(resourceResponse.toString(), dev.ruivieira.ccfd.routes.messages.v0.PredictionResponse.class);
+            PredictionMetadata meta = response.getMetadata();
+            List<MetricsData> metrics = meta.getMetrics();
+            prediction.setProbability(metrics.get(metrics.size()-1).getValue());
 
             Classification classification = new Classification();
             kieSession.setGlobal("classification", classification);

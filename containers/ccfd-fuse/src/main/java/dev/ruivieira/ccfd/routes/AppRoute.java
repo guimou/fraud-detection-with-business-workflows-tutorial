@@ -26,14 +26,11 @@ public class AppRoute extends RouteBuilder {
     private boolean USE_SELDON_TOKEN = false;
     private String SELDON_TOKEN;
 
-    private final Boolean USE_SELDON_STANDARD;
-
     private static final String SELDON_ENDPOINT_KEY = "SELDON_ENDPOINT";
     private static final String SELDON_ENDPOINT_DEFAULT = "predict";
     private String SELDON_ENDPOINT;
 
     public AppRoute() {
-        USE_SELDON_STANDARD = System.getenv("SELDON_STANDARD") != null;
     }
 
     public void configure() {
@@ -96,42 +93,25 @@ public class AppRoute extends RouteBuilder {
                     final String payload = exchange.getIn().getBody().toString();
                     final List<String> kafkaFeatures;
 
-                    final int[] indices = {3, 4, 10, 11, 12, 14, 17, 29};
-                    Integer amountIndex;
-                    if (USE_SELDON_STANDARD) {
-                        kafkaFeatures = MessageParser.parseV0(payload);
-                        // extract the features of interest
-                        for (int index : indices) {
-                            feature.add(Double.parseDouble(kafkaFeatures.get(index)));
-                        }
-                        amountIndex = 30;
-                    } else {
-                        kafkaFeatures = MessageParser.parseV1(payload);
-                        // extract the features of interest
-                        for (int index : indices) {
-                            feature.add(Double.parseDouble(kafkaFeatures.get(index-1)));
-                        }
-                        amountIndex = 29;
-                    }
+                    final int[] indices = {4, 5, 11, 12, 13, 15, 18, 30};
+                    kafkaFeatures = MessageParser.parseV1(payload);
+                    // extract the features of interest
+                    for (int index : indices) {
+                        feature.add(Double.parseDouble(kafkaFeatures.get(index-1)));
+                    Integer amountIndex = 29;
+                    
 
                     //exchange.getOut().setHeader("amount", Double.parseDouble(kafkaFeatures.get(amountIndex)));
                     exchange.getMessage().setHeader("amount", Double.parseDouble(kafkaFeatures.get(amountIndex)));
 
-                    String outgoingPayload;
+                    String outgoingPayload;             
+                    outgoingPayload = "{\"strData\":\"";
 
-                    if (USE_SELDON_STANDARD) {
-                        final PredictionRequest requestObject = new PredictionRequest();
-                        requestObject.addFeatures(feature);
-                        outgoingPayload = PredictionRequest.toJSON(requestObject);
-                    } else {
-                        outgoingPayload = "{\"strData\":\"";
-
-                        outgoingPayload += feature.stream()
-                                .map(Object::toString)
-                                .collect(Collectors.joining(","));
-                        outgoingPayload += "\"}";
-                    }
-
+                    outgoingPayload += feature.stream()
+                            .map(Object::toString)
+                            .collect(Collectors.joining(","));
+                    outgoingPayload += "\"}";
+                    
                     exchange.getMessage().setBody(outgoingPayload);
                     if (USE_SELDON_TOKEN) {
                         exchange.getMessage().setHeader("Authorization", "Bearer " + SELDON_TOKEN);
