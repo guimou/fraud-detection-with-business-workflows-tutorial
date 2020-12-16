@@ -71,6 +71,31 @@ oc apply -n ccfd -f deploy/odh/odh-with-strimzi.yaml
 oc apply -n ccfd -f deploy/odh/odh-no-strimzi.yaml
 ----
 
+ODH deployment is ready when you have this in the Installed Operators panel:
+
+image::img/operators.png[Operators]
+
+and you have those pods running (ids will of course be different):
+
+[source,bash]
+----
+> oc get pods -n ccfd
+
+NAME                                               READY   STATUS    RESTARTS   AGE
+grafana-deployment-9f8c5df68-gdbpf                 1/1     Running   0          46m
+grafana-operator-7755cb4b8-b7mlf                   1/1     Running   0          46m
+odh-message-bus-entity-operator-84f96c5784-kqrn5   3/3     Running   0          45m
+odh-message-bus-kafka-0                            2/2     Running   0          46m
+odh-message-bus-kafka-1                            2/2     Running   0          46m
+odh-message-bus-kafka-2                            2/2     Running   0          46m
+odh-message-bus-zookeeper-0                        1/1     Running   0          46m
+odh-message-bus-zookeeper-1                        1/1     Running   0          46m
+odh-message-bus-zookeeper-2                        1/1     Running   0          46m
+prometheus-operator-7b88c94585-d8hjn               1/1     Running   0          42m
+prometheus-prometheus-0                            3/3     Running   1          41m
+seldon-controller-manager-7ff8d49d55-tj2gj         1/1     Running   0          42m
+----
+
 === Rook-Ceph
 
 https://rook.github.io/docs/rook/v1.4/[Rook-Ceph] is the solution that will provide *Object Storage* to store some data used in the workshop. +
@@ -98,11 +123,14 @@ oc apply -f https://github.com/rook/rook/raw/a123405d6796435800f21f098dfceff8526
 
 TIP: If you are not running on AWS, you must adapt https://github.com/rook/rook/blob/v1.4.7/cluster/examples/kubernetes/ceph/cluster.yaml[this file] to your configuration before applying it.
 
-The rook-ceph cluster will take a few minutes to deploy. You can monitor the deployment in the `rook-ceph` namespace and wait to have 3 pods named osd running:
+The rook-ceph cluster will take a few minutes to deploy. You can monitor the deployment in the `rook-ceph` namespace and wait to have 3 pods named rook-ceph-osd-xxxxx running:
 
 [source,bash]
 ----
-oc get pods -n rook-ceph
+> oc get pods -n rook-ceph | grep rook-ceph-osd-[0-9.]
+rook-ceph-osd-0-5b8587c958-tq7fn                            1/1     Running     0          72s
+rook-ceph-osd-1-6fd6676658-vvb92                            1/1     Running     0          70s
+rook-ceph-osd-2-7bcd559d79-v8csc                            1/1     Running     0          69s
 ----
 
 Once the Ceph cluster is ready, you can create the Object Store:
@@ -113,7 +141,15 @@ Once the Ceph cluster is ready, you can create the Object Store:
 oc apply -f https://github.com/rook/rook/raw/a123405d6796435800f21f098dfceff8526e2339/cluster/examples/kubernetes/ceph/object.yaml
 ----
 
-To acces the object store, you must create a route to the rook service, `rook-ceph-rgw-my-store` (in the rook-ceph namespace) to expose the endpoint. This endpoint url will be used to access the S3 interface from the example notebooks.
+You can verify the Object Store and the Rados Gateway pod (the component providing the S3 interface) are Ok with this:
+
+[source,bash]
+----
+> oc -n rook-ceph get pods | grep rgw
+rook-ceph-rgw-my-store-a-6d7df9db-nlbns                     1/1     Running     0          79s
+----
+
+To acces the object store externally, you must create a route to the rook service, `rook-ceph-rgw-my-store` (in the rook-ceph namespace) to expose the endpoint. This endpoint url will be used to access the S3 interface from the example notebooks.
 
 .Create the route
 [source,bash]
@@ -121,9 +157,15 @@ To acces the object store, you must create a route to the rook service, `rook-ce
 oc expose -n rook-ceph --name='s3' svc/rook-ceph-rgw-my-store
 ----
 
-Your Route will be in the form http://s3-rook-ceph.apps.<Name_of_your_cluster>
+Your Route will be in the form http://s3-rook-ceph.apps.<Name_of_your_cluster>. You can get it with this command:
 
-Create also the Bucket Storage Class, which will allow easy provisioning of buckets later on.
+.Get the S3 route
+[source,bash]
+----
+echo http://$(oc get route -n rook-ceph | grep s3 | awk '{print $2}') 
+----
+
+Create now the Bucket Storage Class, which will allow easy provisioning of buckets later on.
 
 .Create the Storage Class
 [source,bash]
@@ -133,8 +175,9 @@ oc apply -f https://github.com/rook/rook/raw/a123405d6796435800f21f098dfceff8526
 
 === Fraud detection model
 
-We already have trained a fraud detection model that you can deploy by using `deploy/model/modelfull.yaml` in this repository:
+We already have trained a fraud detection model that you can deploy with the Seldon operator (deployed with ODH), using the file `deploy/model/modelfull.yaml` in this repository:
 
+.Deploy the Fraud Detection model with Seldon
 [source,bash]
 ----
 oc apply -n ccfd -f deploy/model/modelfull.yaml
@@ -150,25 +193,48 @@ oc -n ccfd get pods | grep modelfull
 
 You should have a pod named `modelfull-modelfull-0-modelfull-xxxxxxxxx` with the Running status, and 2/2 pods.
 
-Create a route to the model by using `deploy/model/modelfull-route.yaml` in this repo:
+Now create a route to access the model by using the file `deploy/model/modelfull-route.yaml` in this repo:
 
 [source,bash]
 ----
 oc apply -n ccfd -f deploy/model/modelfull-route.yaml
 ----
 
-Enable Prometheus metrics scraping by deploying a Service Monitor for the created service:
+Your model is now served from an externally accessible endpoint. You can get its address with this command:
+
+[source,bash]
+----
+echo http://$(oc get route -n ccfd | grep modelfull | awk '{print $2}') 
+----
+
+Example result: http://modelfull-ccfd.apps.cluster-dae8.dae8.example.opentlc.com
+
+You can now test the model with this command. You should get the exact same result:
+
+.query:
+[source,bash]
+----
+curl -X POST -H 'Content-Type: application/json' -d '{"strData": "0.365194527642578,0.819750231339882,-0.5927999453145171,-0.619484351930421,-2.84752569239798,1.48432160780265,0.499518887687186,72.98"}' http://$(oc get route -n ccfd | grep modelfull | awk '{print $2}')/api/v1.0/predictions
+----
+.result:
+[source,json]
+----
+{"data":{"names":[],"tensor":{"shape":[1],"values":[0]}},"meta":{"metrics":[{"key":"V3","type":"GAUGE","value":0.365194527642578},{"key":"V4","type":"GAUGE","value":0.819750231339882},{"key":"V10","type":"GAUGE","value":-0.5927999453145171},{"key":"V11","type":"GAUGE","value":-0.619484351930421},{"key":"V12","type":"GAUGE","value":-2.84752569239798},{"key":"V14","type":"GAUGE","value":1.48432160780265},{"key":"V17","type":"GAUGE","value":0.499518887687186},{"key":"Amount","type":"GAUGE","value":72.98},{"key":"proba_1","type":"GAUGE","value":0.052660697016054275}]}}
+----
+
+Finally, enable Prometheus metrics scraping by deploying a ServiceMonitor for the Seldon service (general metrics), and a PodMonitor for the custom metrics we are exposing:
 
 [source,bash]
 ----
 oc apply -n ccfd -f deploy/model/modelfull-servicemonitor.yaml
+oc apply -n ccfd -f deploy/model/modelfull-custom-metrics-monitor.yaml
 ----
 
 === Upload data to Rook-Ceph
 
 ==== Bucket creation though Object Bucket Claims
 
-We will store our base data in an Object Store bucket. There are many ways to do it, but here is a method using an Object Bucket Claim. With Rook-Ceph that we deployed earlier, you can use this configuration.
+We will store our base data in an Object Store bucket. There are many ways to create a bucket, but here is a method using an Object Bucket Claim. With Rook-Ceph that we deployed earlier, you can use this configuration:
 
 .Create bucket with Rook-Ceph
 [source,bash]
@@ -257,9 +323,12 @@ aws s3 ls --endpoint-url <S3_ENDPOINT_URL>
 aws s3 ls --endpoint-url http://$(oc get -n rook-ceph route/s3 -o yaml | grep -m 1 '[^\-] host:' | awk '{print $2}')
 ----
 
+It should return something like: `2020-12-16 11:33:56 ccdata-88a98651-6afc-405a-9c28-e49063ad28c5`.
+
 WARNING: For the previous command and all others using the aws client: if your endpoint is using SSL (starts with https) but your OpenShift installation has not been done with recognized certificates, you must add `--no-verify-ssl` at the end of all your commands.
 
-.Copy the credit card transaction creditcard.csv file (available https://s3.amazonaws.com/com.redhat.csds.odh.tutorial-data/data_creditcard.csv[here]) and upload it using (replace < > vars):
+Now, copy the credit card transaction creditcard.csv file (available https://s3.amazonaws.com/com.redhat.csds.odh.tutorial-data/data_creditcard.csv[here]) and upload it using (replace < > vars):
+
 [source,bash]
 ----
 wget -qO- https://s3.amazonaws.com/com.redhat.csds.odh.tutorial-data/data_creditcard.csv | aws s3 cp - --endpoint-url <S3_ENDPOINT_URL> s3://<s3_bucket>/OPEN/uploaded/creditcard.csv --acl public-read-write
@@ -274,7 +343,7 @@ TIP: You can do this in one (long...) command by using all the commands we've se
 wget -qO- https://s3.amazonaws.com/com.redhat.csds.odh.tutorial-data/data_creditcard.csv | aws s3 cp - --endpoint-url http://$(oc get -n rook-ceph route/s3 -o yaml | grep -m 1 '[^\-] host:' | awk '{print $2}') s3://$(oc get -n ccfd cm/ccdata -o yaml | grep [^:]BUCKET_NAME | awk '{print $2}')/OPEN/uploaded/creditcard.csv --acl public-read-write
 ----
 
-.You can verify the file is uploaded using:
+.Verify the file is uploaded using:
 [source,bash]
 ----
 aws s3 ls s3://<s3_bucket>/OPEN/uploaded/ --endpoint-url <ROOK_CEPH_URL>
@@ -286,10 +355,7 @@ aws s3 ls s3://<s3_bucket>/OPEN/uploaded/ --endpoint-url <ROOK_CEPH_URL>
 aws s3 ls s3://$(oc get -n ccfd cm/ccdata -o yaml | grep [^:]BUCKET_NAME | awk '{print $2}')/OPEN/uploaded/ --endpoint-url http://$(oc get -n rook-ceph route/s3 -o yaml | grep -m 1 '[^\-] host:' | awk '{print $2}')
 ----
 
-Both commands flavours should return:
-----
-XXXX-XX-XX XX:XX:XX  150259138 creditcard.csv
-----
+Both commands flavours should return: `XXXX-XX-XX XX:XX:XX  150259138 creditcard.csv`
 
 === KIE Server
 
@@ -441,19 +507,32 @@ oc apply -f deploy/servicemonitors/ccdfuseservicemonitor.yaml
 ----
 
 From the Openshift portal click on the Prometheus route and explore some of the metrics. +
-To launch Grafana dashboard click on the Grafana route.
 
-On top of the Kafka monitoring dashboard, you can deploy the following ones:
+To launch Grafana dashboard click on the Grafana route. +
+
+On top of the Kafka monitoring dashboard that comes with Open Data Hub, you can deploy the following ones:
 
 .Seldon Core
 [source,bash]
 ----
-oc apply -f deploy/grafana/seldon-dashboard.yaml
+oc apply -f deploy/grafana/seldon-core-dashboard.yaml
+----
+
+.Seldon Model Prediction
+[source,bash]
+----
+oc apply -f deploy/grafana/seldon-model-prediction.yaml
 ----
 
 .Kie Server
 [source,bash]
 ----
-oc apply -f deploy/grafana/seldon-dashboard.yaml
+oc apply -f deploy/grafana/kie-dashboard.yaml
+----
+
+.Camel Router
+[source,bash]
+----
+oc apply -f deploy/grafana/router-dashboard.yaml
 ----
 
